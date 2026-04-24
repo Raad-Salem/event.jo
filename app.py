@@ -2,10 +2,9 @@ import streamlit as st
 import google.generativeai as genai
 import json
 
-# --- إعدادات الصفحة ---
+# --- 1. إعدادات الصفحة والتنسيق ---
 st.set_page_config(page_title="مساعد حجز مزارع الأردن", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS ---
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
@@ -13,8 +12,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 1. إعداد المفتاح والداتا ---
-# تأكد من وضع مفتاحك الصحيح هنا
+# --- 2. إعداد المفتاح والبيانات ---
+# ضع مفتاحك هنا (تأكد أنه يبدأ بـ AIza)
 API_KEY = "AIzaSyDkwqVEQroepg-R1Mxeml1bmGzjX9oQnQw" 
 genai.configure(api_key=API_KEY)
 
@@ -36,16 +35,28 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 2. بناء الموديل ---
+# --- 3. بناء الموديل مع معالجة خطأ 404 ---
 system_instruction = f"أنت مساعد ذكي لمنصة حجز مزارع في الأردن. داتا المزارع المتاحة: {json.dumps(farms_data)}. المهام: للأسئلة العامة جاوب بلهجة أردنية. لطلبات البحث أعطِ النتيجة حصراً بصيغة JSON فيها filters و assumptions و recommendations."
 
-try:
-    model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=system_instruction)
-except Exception as e:
-    st.error(f"خطأ في الموديل: {e}")
+# محاولة تحميل الموديل بأكثر من اسم لضمان التوافق
+model_names = ["gemini-1.5-flash-latest", "models/gemini-1.5-flash", "gemini-1.5-flash", "gemini-1.0-pro"]
+model = None
 
-# --- 3. واجهة المستخدم ---
+for name in model_names:
+    try:
+        model = genai.GenerativeModel(model_name=name, system_instruction=system_instruction)
+        # تجربة بسيطة للتأكد أن الموديل شغال
+        model.generate_content("test") 
+        break 
+    except Exception:
+        continue
+
+if model is None:
+    st.error("عذراً، فشل الاتصال بكافة إصدارات الموديل. تأكد من الـ API Key وإصدار المكتبة.")
+
+# --- 4. واجهة المستخدم ---
 st.title("🏡 بوكر مزارع الأردن")
+st.caption("أهلاً بك في نظام البحث الذكي")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -57,23 +68,29 @@ for message in st.session_state.messages:
         else:
             st.markdown(message["content"])
 
-if prompt := st.chat_input("كيف بقدر أساعدك بمزارع الأردن؟"):
+if prompt := st.chat_input("بدي مزرعة في جرش فيها مسبح"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        try:
-            response = model.generate_content(prompt)
-            text_resp = response.text
+        if model:
             try:
-                # محاولة تحويل الرد لـ JSON
-                clean_json = text_resp.replace("```json", "").replace("```", "").strip()
-                data = json.loads(clean_json)
-                st.json(data)
-                st.session_state.messages.append({"role": "assistant", "content": data})
-            except:
-                st.markdown(text_resp)
-                st.session_state.messages.append({"role": "assistant", "content": text_resp})
-        except Exception as e:
-            st.error(f"حدث خطأ: {e}")
+                response = model.generate_content(prompt)
+                text_resp = response.text
+                try:
+                    # محاولة استخراج JSON من الرد
+                    clean_json = text_resp.strip()
+                    if "```json" in clean_json:
+                        clean_json = clean_json.split("```json")[1].split("```")[0]
+                    elif "```" in clean_json:
+                        clean_json = clean_json.split("```")[1].split("```")[0]
+                    
+                    data = json.loads(clean_json.strip())
+                    st.json(data)
+                    st.session_state.messages.append({"role": "assistant", "content": data})
+                except:
+                    st.markdown(text_resp)
+                    st.session_state.messages.append({"role": "assistant", "content": text_resp})
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء توليد الرد: {e}")
