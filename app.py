@@ -89,22 +89,7 @@ if prompt := st.chat_input("مثلاً: بدي مزرعة بعمان فيها م
             st.session_state.messages.append({"role": "assistant", "content": data})
         except:
             st.markdown(text_resp)
-            st.session_state.messages.append({"role": "assistant", "content": text_resp})
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            st.session_state.messages.append({"role": "assistant", "content": 
 import streamlit as st
 import google.generativeai as genai
 import json
