@@ -11,7 +11,7 @@ st.markdown("""
     .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
     .stJson { background-color: #f0f2f6; border-radius: 10px; padding: 10px; }
     </style>
-    """, unsafe_allow_status=True)
+    """, unsafe_allow_html=True)
 
 # --- 1. إعداد المفتاح والداتا ---
 # ملاحظة: يفضل وضع المفتاح في Streamlit Secrets عند الرفع، لكن للسرعة حطه هون:
