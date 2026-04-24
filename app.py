@@ -5,7 +5,7 @@ import json
 # --- إعدادات الصفحة ---
 st.set_page_config(page_title="مساعد حجز مزارع الأردن", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS بسيط لتحسين المظهر ---
+# --- تنسيق CSS ---
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
@@ -14,11 +14,10 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 1. إعداد المفتاح والداتا ---
-# ملاحظة: يفضل وضع المفتاح في Streamlit Secrets عند الرفع، لكن للسرعة حطه هون:
+# تأكد من وضع مفتاحك الصحيح هنا
 API_KEY = "AIzaSyDkwqVEQroepg-R1Mxeml1bmGzjX9oQnQw" 
 genai.configure(api_key=API_KEY)
 
-# الداتا الخاصة بك
 farms_data = [
     {"id": 1, "name": "Green Valley Farm", "location": "Amman", "price_per_day": 120, "available": True, "features": ["Pool", "BBQ", "WiFi"]},
     {"id": 2, "name": "Sunset Farm", "location": "Salt", "price_per_day": 90, "available": True, "features": ["BBQ", "Garden"]},
@@ -37,129 +36,20 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 2. بناء نظام الـ RAG المبسط ---
-system_instruction = f"""
-أنت مساعد ذكي لمنصة حجز مزارع في الأردن. 
-داتا المزارع المتاحة: {json.dumps(farms_data)}
+# --- 2. بناء الموديل ---
+system_instruction = f"أنت مساعد ذكي لمنصة حجز مزارع في الأردن. داتا المزارع المتاحة: {json.dumps(farms_data)}. المهام: للأسئلة العامة جاوب بلهجة أردنية. لطلبات البحث أعطِ النتيجة حصراً بصيغة JSON فيها filters و assumptions و recommendations."
 
-المهام:
-- للأسئلة العامة (مين أنت، شو بتعمل): جاوب بلهجة أردنية ودودة وبدون JSON.
-- لطلبات البحث: أعطِ النتيجة حصراً بصيغة JSON التالية:
-{{
-  "filters": {{"location": "", "price_range": "", "number_of_people": "", "features": []}},
-  "assumptions": ["افتراضاتك"],
-  "recommendations": [{{"name": "", "reason": ""}}]
-}}
-
-قاعدة: لا تقترح أي مزرعة حالتها available: false.
-"""
-
-model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=system_instruction)
-
-# --- 3. واجهة المستخدم ---
-st.title("🏡 بوكر مزارع الأردن (تجريبي)")
-st.caption("نظام ذكي للبحث عن المزارع باستخدام الـ RAG")
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# عرض المحادثة
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        if isinstance(message["content"], dict):
-            st.json(message["content"])
-        else:
-            st.markdown(message["content"])
-
-# إدخال المستخدم
-if prompt := st.chat_input("مثلاً: بدي مزرعة بعمان فيها مسبح تحت الـ 150"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        response = model.generate_content(prompt)
-        text_resp = response.text
-        
-        try:
-            # محاولة تنظيف الرد إذا كان يحتوي على علامات Markdown
-            clean_json = text_resp.replace("```json", "").replace("```", "").strip()
-            data = json.loads(clean_json)
-            st.json(data)
-            st.session_state.messages.append({"role": "assistant", "content": data})
-        except:
-            st.markdown(text_resp)
-            st.session_state.messages.append({"role": "assistant", "content": 
-import streamlit as st
-import google.generativeai as genai
-import json
-
-# --- إعدادات الصفحة ---
-st.set_page_config(page_title="مساعد حجز مزارع الأردن", page_icon="🏡", layout="centered")
-
-# --- تنسيق CSS (تم تعديل السطر المسبب للخطأ) ---
-st.markdown("""
-    <style>
-    .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
-    .stJson { background-color: #f0f2f6; border-radius: 10px; padding: 10px; }
-    </style>
-    """, unsafe_allow_html=True) # تم التعديل هنا من unsafe_allow_status
-
-# --- 1. إعداد المفتاح والداتا ---
-# تأكد أنك وضعت الـ API Key الصحيح هنا
-API_KEY = "AIzaSyDkwqVEQroepg-R1Mxeml1bmGzjX9oQnQw" 
-genai.configure(api_key=API_KEY)
-
-# الداتا الخاصة بك
-farms_data = [
-    {"id": 1, "name": "Green Valley Farm", "location": "Amman", "price_per_day": 120, "available": True, "features": ["Pool", "BBQ", "WiFi"]},
-    {"id": 2, "name": "Sunset Farm", "location": "Salt", "price_per_day": 90, "available": True, "features": ["BBQ", "Garden"]},
-    {"id": 3, "name": "Olive Tree Farm", "location": "Jerash", "price_per_day": 110, "available": False, "features": ["Pool", "BBQ"]},
-    {"id": 4, "name": "Blue Sky Farm", "location": "Madaba", "price_per_day": 100, "available": True, "features": ["BBQ", "WiFi"]},
-    {"id": 5, "name": "Golden Field Farm", "location": "Irbid", "price_per_day": 95, "available": True, "features": ["Parking", "Farm Animals"]},
-    {"id": 6, "name": "Royal Hills Farm", "location": "Amman", "price_per_day": 150, "available": True, "features": ["Pool", "Luxury Seating"]},
-    {"id": 7, "name": "Cherry Blossom Farm", "location": "Ajloun", "price_per_day": 85, "available": True, "features": ["Nature View", "BBQ"]},
-    {"id": 8, "name": "Palm Oasis Farm", "location": "Aqaba", "price_per_day": 140, "available": False, "features": ["Pool", "Sea View"]},
-    {"id": 9, "name": "Green Haven Farm", "location": "Zarqa", "price_per_day": 80, "available": True, "features": ["BBQ", "Parking"]},
-    {"id": 10, "name": "Desert Rose Farm", "location": "Wadi Rum", "price_per_day": 160, "available": True, "features": ["Luxury Tents", "Campfire"]},
-    {"id": 11, "name": "Farm 11", "location": "Amman", "price_per_day": 105, "available": True, "features": ["BBQ", "WiFi"]},
-    {"id": 12, "name": "Farm 12", "location": "Salt", "price_per_day": 92, "available": True, "features": ["Garden", "BBQ"]},
-    {"id": 13, "name": "Farm 13", "location": "Jerash", "price_per_day": 115, "available": False, "features": ["Pool", "Playground"]},
-    {"id": 14, "name": "Farm 14", "location": "Madaba", "price_per_day": 98, "available": True, "features": ["BBQ", "Parking"]},
-    {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
-]
-
-# --- 2. بناء نظام الـ RAG المبسط ---
-system_instruction = f"""
-أنت مساعد ذكي لمنصة حجز مزارع في الأردن. 
-داتا المزارع المتاحة: {json.dumps(farms_data)}
-
-المهام:
-- للأسئلة العامة (مين أنت، شو بتعمل): جاوب بلهجة أردنية ودودة وبدون JSON.
-- لطلبات البحث: أعطِ النتيجة حصراً بصيغة JSON التالية:
-{{
-  "filters": {{"location": "", "price_range": "", "number_of_people": "", "features": []}},
-  "assumptions": ["افتراضاتك"],
-  "recommendations": [{{ "name": "", "reason": "" }}]
-}}
-
-قاعدة: لا تقترح أي مزرعة حالتها available: false.
-"""
-
-# استخدمنا "models/gemini-1.5-flash" للتأكد من المسار الصحيح للموديل
 try:
-    model = genai.GenerativeModel(model_name="models/gemini-1.5-flash", system_instruction=system_instruction)
+    model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=system_instruction)
 except Exception as e:
-    st.error(f"حدث خطأ في تحميل الموديل: {e}")
+    st.error(f"خطأ في الموديل: {e}")
 
 # --- 3. واجهة المستخدم ---
-st.title("🏡 بوكر مزارع الأردن (تجريبي)")
-st.caption("نظام ذكي للبحث عن المزارع باستخدام الـ RAG")
+st.title("🏡 بوكر مزارع الأردن")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# عرض المحادثة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if isinstance(message["content"], dict):
@@ -167,8 +57,7 @@ for message in st.session_state.messages:
         else:
             st.markdown(message["content"])
 
-# إدخال المستخدم
-if prompt := st.chat_input("مثلاً: بدي مزرعة بعمان فيها مسبح تحت الـ 150"):
+if prompt := st.chat_input("كيف بقدر أساعدك بمزارع الأردن؟"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -177,9 +66,8 @@ if prompt := st.chat_input("مثلاً: بدي مزرعة بعمان فيها م
         try:
             response = model.generate_content(prompt)
             text_resp = response.text
-            
             try:
-                # تنظيف الرد لتحويله لـ JSON بشكل صحيح
+                # محاولة تحويل الرد لـ JSON
                 clean_json = text_resp.replace("```json", "").replace("```", "").strip()
                 data = json.loads(clean_json)
                 st.json(data)
@@ -188,4 +76,4 @@ if prompt := st.chat_input("مثلاً: بدي مزرعة بعمان فيها م
                 st.markdown(text_resp)
                 st.session_state.messages.append({"role": "assistant", "content": text_resp})
         except Exception as e:
-            st.error(f"تعذر الحصول على رد من الموديل. تأكد من صحة الـ API Key والموديل. الخطأ: {e}")
+            st.error(f"حدث خطأ: {e}")
