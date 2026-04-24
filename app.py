@@ -15,7 +15,7 @@ st.markdown("""
 
 # --- 1. إعداد المفتاح والداتا ---
 # ملاحظة: يفضل وضع المفتاح في Streamlit Secrets عند الرفع، لكن للسرعة حطه هون:
-API_KEY = "ضع_هنا_مفتاح_جيمناي_الخاص_بك" 
+API_KEY = "AIzaSyDkwqVEQroepg-R1Mxeml1bmGzjX9oQnQw" 
 genai.configure(api_key=API_KEY)
 
 # الداتا الخاصة بك
