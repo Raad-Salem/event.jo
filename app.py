@@ -2,22 +2,24 @@ import streamlit as st
 from groq import Groq
 import json
 
-# --- إعدادات الصفحة ---
-st.set_page_config(page_title="مساعد مزارع الأردن (Groq)", page_icon="⚡", layout="centered")
+# --- 1. إعدادات الصفحة ---
+st.set_page_config(page_title="ماكان - مساعد event-jo.com الذكي", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS ---
+# --- تنسيق CSS لتحسين مظهر المحادثة ---
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
-    .stJson { background-color: #f0f2f6; border-radius: 10px; padding: 10px; }
+    .stJson { background-color: #f8f9fa; border-radius: 10px; padding: 10px; border: 1px solid #ddd; }
+    .stMarkdown h3 { color: #2e7d32; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 1. إعداد المفتاح والبيانات ---
-# الـ API Key اللي زودتني فيه
+# --- 2. إعداد المفتاح والبيانات ---
+# ملاحظة: تأكد من حماية هذا المفتاح أو وضعه في Streamlit Secrets
 GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
+# بيانات المزارع (قاعدة البيانات المصغرة)
 farms_data = [
     {"id": 1, "name": "Green Valley Farm", "location": "Amman", "price_per_day": 120, "available": True, "features": ["Pool", "BBQ", "WiFi"]},
     {"id": 2, "name": "Sunset Farm", "location": "Salt", "price_per_day": 90, "available": True, "features": ["BBQ", "Garden"]},
@@ -36,28 +38,43 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 2. بناء تعليمات النظام ---
+# --- 3. بناء تعليمات النظام (Prompt Engineering) ---
 system_prompt = f"""
-أنت مساعد ذكي لمنصة حجز مزارع في الأردن. 
-داتا المزارع المتاحة: {json.dumps(farms_data)}
+أنت "ماكان" (Makan)، المساعد الذكي الرسمي لموقع event-jo.com المتخصص في حجز مزارع الأردن.
 
-المهام:
-- للأسئلة العامة: جاوب بلهجة أردنية ودودة.
-- لطلبات البحث: أعطِ النتيجة حصراً بصيغة JSON التالية:
+شخصيتك:
+- نشمي، محترف، وودود جداً.
+- تتحدث بلهجة أردنية بيضاء وراقية.
+- دائماً تفتخر بكونك جزءاً من فريق event-jo.com.
+
+البيانات المتاحة لك: {json.dumps(farms_data)}
+
+قواعد الرد:
+1. إذا سألك المستخدم عن هويتك:
+   - الرد: "أهلاً بك! أنا 'ماكان'، مساعدك الذكي من موقع event-jo.com. أنا هون لحتى أسهل عليك تلاقي أحلى مزارع الأردن اللي بتناسب جمعاتكم وذوقكم. كيف بقدر أخدمك اليوم؟"
+
+2. عند طلب البحث عن مزارع:
+   - ابدأ بترحيب حار وجملة تشويقية (مثلاً: "أبشر يا غالي، لقيتلك خيارات بتجنن بـ عمان...")
+   - يجب أن يتبع النص JSON حصراً بالتنسيق التالي:
 {{
   "filters": {{"location": "", "price_range": "", "features": []}},
-  "assumptions": ["افتراضاتك"],
-  "recommendations": [{{"name": "", "reason": ""}}]
+  "assumptions": ["افتراضات ذكية بناءً على حاجة المستخدم"],
+  "recommendations": [{{ "name": "", "reason": "اشرح الميزة بلهجة أردنية جذابة" }}]
 }}
-قاعدة: لا تقترح أي مزرعة available: false.
+
+3. ملاحظات هامة:
+   - لا تقترح مزارع غير متاحة (available: false).
+   - إذا لم تجد طلباً مطابقاً تماماً، اقترح أقرب خيار واعتذر بلطف.
 """
 
-# --- 3. واجهة المستخدم ---
-st.title("🏡 بوكر مزارع الأردن (Powered by Groq)")
+# --- 4. واجهة المستخدم ---
+st.title("🏡 مساعد مزارع الأردن - ماكان")
+st.caption("مرحباً بك في موقع event-jo.com - بوابتك لأجمل مزارع المملكة")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# عرض الرسائل السابقة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if isinstance(message["content"], dict):
@@ -65,37 +82,46 @@ for message in st.session_state.messages:
         else:
             st.markdown(message["content"])
 
-if prompt := st.chat_input("بدي مزرعة بعمان فيها مسبح"):
+# إدخال المستخدم
+if prompt := st.chat_input("بدي مزرعة بالسلط فيها مسبح"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
-            # طلب الرد من Groq (استخدام موديل llama-3.3-70b-versatile هو الأفضل حالياً)
+            # الاتصال بـ Groq
             chat_completion = client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
                 model="llama-3.3-70b-versatile",
+                temperature=0.7,
             )
             
-            text_resp = chat_completion.choices[0].message.content
+            full_response = chat_completion.choices[0].message.content
             
-            try:
-                # استخراج الـ JSON
-                clean_json = text_resp.strip()
-                if "```json" in clean_json:
-                    clean_json = clean_json.split("```json")[1].split("```")[0]
-                elif "```" in clean_json:
-                    clean_json = clean_json.split("```")[1].split("```")[0]
+            # منطق فصل النص عن الـ JSON للعرض الجمالي
+            if "{" in full_response and "}" in full_response:
+                intro = full_response.split("{")[0].strip()
+                json_string = "{" + full_response.split("{", 1)[1]
                 
-                data = json.loads(clean_json.strip())
-                st.json(data)
-                st.session_state.messages.append({"role": "assistant", "content": data})
-            except:
-                st.markdown(text_resp)
-                st.session_state.messages.append({"role": "assistant", "content": text_resp})
+                if intro:
+                    st.markdown(f"**ماكان:** {intro}")
+                
+                try:
+                    # تنظيف الـ JSON من أي markdown tags
+                    clean_json = json_string.replace("```json", "").replace("```", "").strip()
+                    data = json.loads(clean_json)
+                    st.json(data)
+                    st.session_state.messages.append({"role": "assistant", "content": data})
+                except:
+                    st.markdown(full_response)
+                    st.session_state.messages.append({"role": "assistant", "content": full_response})
+            else:
+                st.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                
         except Exception as e:
-            st.error(f"حدث خطأ: {e}")
+            st.error(f"حدث خطأ في النظام: {e}")
