@@ -1,24 +1,25 @@
 import streamlit as st
 from groq import Groq
 import json
+import re
 
 # --- 1. إعدادات الصفحة ---
-st.set_page_config(page_title="ماكان - مساعد event-jo.com", page_icon="🏡", layout="centered")
+st.set_page_config(page_title="ماكان - event-jo.com", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS لتحسين العرض البصري ---
+# --- تنسيق CSS احترافي ---
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
     .farm-card {
-        background-color: #ffffff;
-        border-left: 5px solid #2e7d32;
+        background-color: #f9f9f9;
+        border-right: 6px solid #2e7d32;
         padding: 15px;
-        border-radius: 10px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-        margin-bottom: 15px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        direction: rtl;
     }
-    .farm-name { color: #2e7d32; font-size: 20px; font-weight: bold; }
-    .farm-reason { color: #555; font-style: italic; }
+    .farm-name { color: #2e7d32; font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; }
+    .farm-detail { color: #333; font-size: 1rem; margin-bottom: 3px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -44,20 +45,22 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 3. تعليمات النظام ---
+# --- 3. البرومبت الاحترافي ---
 system_prompt = f"""
-أنت "ماكان" (Makan)، المساعد الذكي لموقع event-jo.com.
-مهمتك مساعدة المستخدمين في العثور على مزارع في الأردن من هذه الداتا: {json.dumps(farms_data)}
+أنت المساعد الذكي "ماكان" لموقع event-jo.com. 
+مهمتك مساعدة الأردنيين في حجز مزارع من هذه البيانات: {json.dumps(farms_data)}
 
-شخصيتك: أردني نشمي، ودود، ومهني.
-
-عند طلب مزرعة، يجب أن ترد بنص طبيعي أولاً، متبوعاً بـ JSON يحتوي على التفاصيل. 
-تأكد أن الـ JSON نظيف تماماً ولا يحتوي على ترقيم خارجي (مثل 0: أو 1:).
+شروط الرد الإلزامية:
+1. ابدأ دائماً بجملة ترحيبية أردنية (مثال: "يا هلا والله، أبشر من عيوني...")
+2. اذكر أسماء المزارع المقترحة باختصار في النص.
+3. ضع تفاصيل البحث التقنية في نهاية الرد داخل وسم [DATA]...[/DATA] بصيغة JSON حصراً.
+4. التنسيق المطلوب للـ JSON:
+   {{"recommendations": [{{"name": "", "price": "", "features": "", "reason": ""}}]}}
 """
 
 # --- 4. واجهة المستخدم ---
-st.title("🏡 ماكان - مساعد حجز مزارع الأردن")
-st.caption("خدمة ذكية مقدمة من event-jo.com")
+st.title("🏡 ماكان - مساعد مزارع الأردن")
+st.caption("موقع event-jo.com يرحب بك")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -80,37 +83,34 @@ if prompt := st.chat_input("بدي مزرعة بعمان"):
             )
             full_response = chat_completion.choices[0].message.content
 
-            if "{" in full_response:
-                intro = full_response.split("{")[0].strip()
-                json_part = "{" + full_response.split("{", 1)[1]
-                
-                # عرض الترحيب
-                if intro:
-                    st.markdown(f"### ✨ أبشر، هاي أحلى مزارع طلبك:")
-                    st.write(intro)
-                
+            # --- منطق الاستخراج الذكي ---
+            # البحث عن الـ JSON داخل الوسوم [DATA]
+            json_match = re.search(r"\[DATA\](.*?)\[/DATA\]", full_response, re.DOTALL)
+            
+            # عرض النص (كل شيء قبل الوسم)
+            display_text = full_response.split("[DATA]")[0].strip()
+            st.markdown(f"### ✨ رد ماكان:")
+            st.write(display_text)
+
+            if json_match:
                 try:
-                    # تنظيف وتحويل الـ JSON
-                    clean_json = json_part.replace("```json", "").replace("```", "").strip()
-                    data = json.loads(clean_json)
+                    json_str = json_match.group(1).strip()
+                    data = json.loads(json_str)
                     
-                    # عرض المزارع بتنسيق فخم (Cards)
+                    st.markdown("---")
                     for rec in data.get("recommendations", []):
                         st.markdown(f"""
                         <div class="farm-card">
-                            <div class="farm-name">📍 الاسم: {rec['name']}</div>
-                            <div class="farm-reason">💡 المميزات: {rec['reason']}</div>
+                            <div class="farm-name">🏠 {rec['name']}</div>
+                            <div class="farm-detail">💰 السعر: {rec.get('price', 'حسب التواصل')} دينار</div>
+                            <div class="farm-detail">🌟 المميزات: {rec.get('features', 'مسبح وجلسات')}</div>
+                            <div class="farm-detail">📝 ليش بنصحك فيها: {rec.get('reason', '')}</div>
                         </div>
                         """, unsafe_allow_html=True)
-                    
-                    with st.expander("بيانات النظام التقنية"):
-                        st.json(data)
                 except:
-                    st.markdown(full_response)
-            else:
-                st.markdown(full_response)
+                    pass # إذا فشل الـ JSON ما بنخرب الواجهة
             
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
+            st.session_state.messages.append({"role": "assistant", "content": display_text})
             
         except Exception as e:
-            st.error(f"عذراً، حدث خطأ: {e}")
+            st.error(f"حدث خطأ: {e}")
