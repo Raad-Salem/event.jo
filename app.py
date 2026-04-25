@@ -4,9 +4,9 @@ import json
 import re
 
 # --- 1. إعدادات الصفحة ---
-st.set_page_config(page_title="ماكان - مساعد event-jo.com", page_icon="🏡", layout="centered")
+st.set_page_config(page_title="ماكان - event-jo.com", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS احترافي لمنع تكسر الواجهة ---
+# --- تنسيق CSS ثابت ونظيف ---
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 15px; }
@@ -16,19 +16,17 @@ st.markdown("""
         padding: 18px;
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        margin: 20px 0;
+        margin: 15px 0;
         direction: rtl;
         text-align: right;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .farm-name { color: #2e7d32; font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-    .farm-info { color: #333; font-size: 1rem; line-height: 1.8; margin-bottom: 5px; }
+    .farm-name { color: #2e7d32; font-size: 1.3rem; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+    .farm-info { color: #333; font-size: 1rem; line-height: 1.7; margin-bottom: 4px; }
     .farm-info b { color: #2e7d32; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. البيانات والـ API ---
-# يفضل وضع المفتاح في Streamlit Secrets لاحقاً
 GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -48,28 +46,31 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 3. البرومبت الذكي ---
+# --- 3. البرومبت "الصارم" ---
 system_prompt = f"""
-أنت المساعد الذكي "ماكان" من موقع event-jo.com. 
-مهمتك: مساعدة المستخدمين في اختيار مزارع الأردن من القائمة التالية فقط: {json.dumps(farms_data)}
+أنت المساعد "ماكان" من event-jo.com. 
+مهمتك الوحيدة هي ترشيح مزارع من القائمة التالية: {json.dumps(farms_data)}
 
-القواعد:
-1. إذا كانت الرسالة مجرد ترحيب أو سؤال عن اسمك، جاوب بلطف وبلهجة أردنية دون ذكر المزارع.
-2. إذا طلب المستخدم مزارع أو سأل عن منطقة، يجب أن تقدم له اقتراحات ثم تضع التفاصيل بصيغة JSON داخل وسم [DATA]...[/DATA].
-3. التنسيق المطلوب للـ JSON: 
-{{"recommendations": [{{"name": "اسم المزرعة", "price": "السعر", "features": "المميزات", "reason": "سبب الترشيح"}}]}}
-4. لا تجب عن أي أسئلة خارج نطاق السياحة والمزارع في الأردن.
-5. لا تقترح مزارع غير موجودة في القائمة.
+قواعد الرد:
+1. ممنوع نهائياً كتابة أي كود HTML أو CSS في ردك (لا تكتب <div... ولا غيره).
+2. ابدأ بردك بجملة ترحيبية قصيرة بلهجة أردنية.
+3. ضع اقتراحات المزارع حصراً داخل وسم [DATA]...[/DATA] بصيغة JSON فقط.
+4. شكل الـ JSON المطلوب:
+{{
+  "recommendations": [
+    {{"name": "اسم المزرعة", "price": 0, "features": "ميزة 1، ميزة 2", "reason": "لماذا اخترتها؟"}}
+  ]
+}}
+5. إذا سألك عن شيء غير المزارع، اعتذر بلطف.
 """
 
 # --- 4. واجهة المستخدم ---
 st.title("🏡 ماكان - مساعد مزارع الأردن")
-st.caption("موقع event-jo.com - بوابتك لأجمل مزارع المملكة")
+st.caption("event-jo.com - بوابتك لأجمل مزارع المملكة")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# عرض المحادثة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"], unsafe_allow_html=True)
@@ -81,43 +82,42 @@ if prompt := st.chat_input("كيف بقدر أساعدك اليوم؟"):
 
     with st.chat_message("assistant"):
         try:
-            # بناء السياق للذكاء الاصطناعي
+            # تجهيز المحادثة
             history = [{"role": "system", "content": system_prompt}]
             for msg in st.session_state.messages[-5:]:
-                # تنظيف المحتوى من أي كود HTML مخزن قبل إرساله للموديل
-                clean_text = re.sub(r'<div.*?>.*?</div>', '', msg["content"], flags=re.DOTALL)
-                history.append({"role": msg["role"], "content": clean_text})
+                # حذف أي HTML سابق قبل إرساله للموديل عشان ما يقلده
+                clean_msg = re.sub(r'<.*?>', '', msg["content"], flags=re.DOTALL)
+                history.append({"role": msg["role"], "content": clean_text if 'clean_text' in locals() else clean_msg})
 
             chat_completion = client.chat.completions.create(
                 messages=history,
                 model="llama-3.3-70b-versatile",
-                temperature=0.5, # توازن بين الذكاء والالتزام
+                temperature=0.4,
             )
             
             full_res = chat_completion.choices[0].message.content
             
-            # استخراج النص (ما قبل البيانات التقنية)
+            # 1. استخراج النص الترحيبي (قبل الداتا)
             display_text = full_res.split("[DATA]")[0].strip()
-            
-            # البحث عن الـ JSON بأكثر من طريقة لضمان الاستقرار
-            json_pattern = r'\{.*"recommendations".*\}'
-            json_match = re.search(json_pattern, full_res, re.DOTALL)
-            
+            # التأكد من تنظيف النص من أي JSON قد يهرب خارج الوسوم
+            display_text = re.sub(r'\{.*\}', '', display_text, flags=re.DOTALL).strip()
+
+            # 2. استخراج الـ JSON وتحويله لكروت
             cards_html = ""
+            json_match = re.search(r"\[DATA\](.*?)\[/DATA\]", full_res, re.DOTALL) or re.search(r"(\{.*\})", full_res, re.DOTALL)
+            
             if json_match:
                 try:
-                    data = json.loads(json_match.group(0).strip())
+                    data = json.loads(json_match.group(1 if "[DATA]" in full_res else 0).strip())
                     for rec in data.get("recommendations", []):
                         cards_html += f"""
                         <div class="farm-card">
                             <div class="farm-name">🏠 {rec['name']}</div>
-                            <div class="farm-info">💰 <b>السعر:</b> {rec.get('price', 'حسب التواصل')} دينار</div>
-                            <div class="farm-info">🌟 <b>المميزات:</b> {rec.get('features', 'مسبح وجلسات')}</div>
-                            <div class="farm-info">📝 <b>ليش بنصحك فيها:</b> {rec.get('reason', '')}</div>
+                            <div class="farm-info">💰 <b>السعر:</b> {rec.get('price')} دينار</div>
+                            <div class="farm-info">🌟 <b>المميزات:</b> {rec.get('features')}</div>
+                            <div class="farm-info">📝 <b>ليش بنصحك فيها:</b> {rec.get('reason')}</div>
                         </div>
                         """
-                    # تنظيف النص النهائي من أي كود JSON قد يظهر للمستخدم
-                    display_text = re.sub(json_pattern, '', display_text, flags=re.DOTALL).strip()
                 except:
                     pass
 
