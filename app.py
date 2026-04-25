@@ -6,24 +6,26 @@ import re
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(page_title="ماكان - event-jo.com", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS احترافي ---
+# --- تنسيق CSS ثابت وواضح ---
 st.markdown("""
     <style>
-    .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
+    .stChatMessage { border-radius: 15px; margin-bottom: 15px; }
     .farm-card {
-        background-color: #f9f9f9;
+        background-color: #ffffff;
         border-right: 6px solid #2e7d32;
         padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 12px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-top: 10px;
+        margin-bottom: 10px;
         direction: rtl;
     }
-    .farm-name { color: #2e7d32; font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; }
-    .farm-detail { color: #333; font-size: 1rem; margin-bottom: 3px; }
+    .farm-name { color: #2e7d32; font-size: 1.2rem; font-weight: bold; }
+    .farm-detail { color: #444; font-size: 0.95rem; margin-top: 3px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. إعداد المفتاح والبيانات ---
+# --- 2. البيانات والـ API ---
 GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -40,77 +42,84 @@ farms_data = [
     {"id": 10, "name": "Desert Rose Farm", "location": "Wadi Rum", "price_per_day": 160, "available": True, "features": ["Luxury Tents", "Campfire"]},
     {"id": 11, "name": "Farm 11", "location": "Amman", "price_per_day": 105, "available": True, "features": ["BBQ", "WiFi"]},
     {"id": 12, "name": "Farm 12", "location": "Salt", "price_per_day": 92, "available": True, "features": ["Garden", "BBQ"]},
-    {"id": 13, "name": "Farm 13", "location": "Jerash", "price_per_day": 115, "available": False, "features": ["Pool", "Playground"]},
     {"id": 14, "name": "Farm 14", "location": "Madaba", "price_per_day": 98, "available": True, "features": ["BBQ", "Parking"]},
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 3. البرومبت الاحترافي ---
+# --- 3. البرومبت المطور ---
 system_prompt = f"""
-أنت المساعد الذكي "ماكان" لموقع event-jo.com. 
-مهمتك مساعدة الأردنيين في حجز مزارع من هذه البيانات: {json.dumps(farms_data)}
+أنت "ماكان" مساعد event-jo.com. اتبع القواعد التالية بدقة:
 
-شروط الرد الإلزامية:
-1. ابدأ دائماً بجملة ترحيبية أردنية (مثال: "يا هلا والله، أبشر من عيوني...")
-2. اذكر أسماء المزارع المقترحة باختصار في النص.
-3. ضع تفاصيل البحث التقنية في نهاية الرد داخل وسم [DATA]...[/DATA] بصيغة JSON حصراً.
-4. التنسيق المطلوب للـ JSON:
+1. **التمييز بين المحادثة والبحث:**
+   - إذا كان سؤال المستخدم تحية (هاي، كيفك، مين أنت)، جاوب بلهجة أردنية ودودة وبدون ذكر أي مزارع أو استخدام وسم [DATA].
+   - إذا طلب المستخدم "مزرعة" أو سأل عن "مكان" أو "عدد أشخاص"، قدم الرد المناسب ثم ألحقه بالبيانات داخل وسم [DATA]...[/DATA].
+
+2. **قاعدة البيانات:** {json.dumps(farms_data)}
+
+3. **تنسيق الـ JSON داخل [DATA]:**
    {{"recommendations": [{{"name": "", "price": "", "features": "", "reason": ""}}]}}
 """
 
 # --- 4. واجهة المستخدم ---
 st.title("🏡 ماكان - مساعد مزارع الأردن")
-st.caption("موقع event-jo.com يرحب بك")
+st.caption("موقع event-jo.com - نخدمك بعيونا")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# عرض الرسائل المخزنة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        st.markdown(message["content"], unsafe_allow_html=True)
 
-if prompt := st.chat_input("بدي مزرعة بعمان"):
+if prompt := st.chat_input("اسأل ماكان..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
-            chat_completion = client.chat.completions.create(
-                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
-                temperature=0.6,
-            )
-            full_response = chat_completion.choices[0].message.content
+            # إرسال تاريخ المحادثة للموديل ليفهم السياق
+            messages_history = [{"role": "system", "content": system_prompt}]
+            for msg in st.session_state.messages[-3:]: # آخر 3 رسائل للسياق
+                role = "assistant" if msg["role"] == "assistant" else "user"
+                # تنظيف المحتوى من الـ HTML المخزن قبل إرساله للموديل
+                clean_content = re.sub(r'<div.*?>.*?</div>', '', msg["content"], flags=re.DOTALL)
+                messages_history.append({"role": role, "content": clean_content})
 
-            # --- منطق الاستخراج الذكي ---
-            # البحث عن الـ JSON داخل الوسوم [DATA]
+            chat_completion = client.chat.completions.create(
+                messages=messages_history,
+                model="llama-3.3-70b-versatile",
+                temperature=0.4,
+            )
+            
+            full_response = chat_completion.choices[0].message.content
+            
+            # فصل النص عن البيانات
+            display_text = full_response.split("[DATA]")[0].strip()
+            final_html_output = display_text
+            
             json_match = re.search(r"\[DATA\](.*?)\[/DATA\]", full_response, re.DOTALL)
             
-            # عرض النص (كل شيء قبل الوسم)
-            display_text = full_response.split("[DATA]")[0].strip()
-            st.markdown(f"### ✨ رد ماكان:")
-            st.write(display_text)
-
             if json_match:
                 try:
-                    json_str = json_match.group(1).strip()
-                    data = json.loads(json_str)
-                    
-                    st.markdown("---")
+                    data = json.loads(json_match.group(1).strip())
+                    cards_html = "<br>"
                     for rec in data.get("recommendations", []):
-                        st.markdown(f"""
+                        cards_html += f"""
                         <div class="farm-card">
                             <div class="farm-name">🏠 {rec['name']}</div>
-                            <div class="farm-detail">💰 السعر: {rec.get('price', 'حسب التواصل')} دينار</div>
-                            <div class="farm-detail">🌟 المميزات: {rec.get('features', 'مسبح وجلسات')}</div>
+                            <div class="farm-detail">💰 السعر: {rec.get('price', 'اتصال')} دينار</div>
+                            <div class="farm-detail">🌟 المميزات: {rec.get('features', '')}</div>
                             <div class="farm-detail">📝 ليش بنصحك فيها: {rec.get('reason', '')}</div>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """
+                    final_html_output += cards_html
                 except:
-                    pass # إذا فشل الـ JSON ما بنخرب الواجهة
-            
-            st.session_state.messages.append({"role": "assistant", "content": display_text})
+                    pass
+
+            st.markdown(final_html_output, unsafe_allow_html=True)
+            st.session_state.messages.append({"role": "assistant", "content": final_html_output})
             
         except Exception as e:
             st.error(f"حدث خطأ: {e}")
