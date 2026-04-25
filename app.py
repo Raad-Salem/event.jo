@@ -1,11 +1,11 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 import json
 
-# --- 1. إعدادات الصفحة ---
-st.set_page_config(page_title="مساعد حجز مزارع الأردن", page_icon="🏡", layout="centered")
+# --- إعدادات الصفحة ---
+st.set_page_config(page_title="مساعد مزارع الأردن (Groq)", page_icon="⚡", layout="centered")
 
-# --- 2. التنسيق (تم تصحيح unsafe_allow_html) ---
+# --- تنسيق CSS ---
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
@@ -13,12 +13,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. إعداد المفتاح والبيانات ---
-# تأكد من وضع مفتاحك الصحيح هنا
-API_KEY = "AIzaSyDkwqVEQroepg-R1Mxeml1bmGzjX9oQnQw" 
-genai.configure(api_key=API_KEY)
+# --- 1. إعداد المفتاح والبيانات ---
+# الـ API Key اللي زودتني فيه
+GROQ_API_KEY = "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"
+client = Groq(api_key=GROQ_API_KEY)
 
-# بيانات المزارع (الـ 15 مزرعة)
 farms_data = [
     {"id": 1, "name": "Green Valley Farm", "location": "Amman", "price_per_day": 120, "available": True, "features": ["Pool", "BBQ", "WiFi"]},
     {"id": 2, "name": "Sunset Farm", "location": "Salt", "price_per_day": 90, "available": True, "features": ["BBQ", "Garden"]},
@@ -37,27 +36,28 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 4. بناء الموديل ---
-system_instruction = f"أنت مساعد ذكي لمنصة حجز مزارع في الأردن. داتا المزارع المتاحة: {json.dumps(farms_data)}. المهام: للأسئلة العامة جاوب بلهجة أردنية. لطلبات البحث أعطِ النتيجة حصراً بصيغة JSON فيها filters و assumptions و recommendations."
+# --- 2. بناء تعليمات النظام ---
+system_prompt = f"""
+أنت مساعد ذكي لمنصة حجز مزارع في الأردن. 
+داتا المزارع المتاحة: {json.dumps(farms_data)}
 
-# محاولة تحميل الموديل بالاسم الأكثر استقراراً
-try:
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash", 
-        system_instruction=system_instruction
-    )
-except Exception as e:
-    st.error(f"خطأ في تحميل الموديل: {e}")
+المهام:
+- للأسئلة العامة: جاوب بلهجة أردنية ودودة.
+- لطلبات البحث: أعطِ النتيجة حصراً بصيغة JSON التالية:
+{{
+  "filters": {{"location": "", "price_range": "", "features": []}},
+  "assumptions": ["افتراضاتك"],
+  "recommendations": [{{"name": "", "reason": ""}}]
+}}
+قاعدة: لا تقترح أي مزرعة available: false.
+"""
 
-# --- 5. واجهة المستخدم ---
-st.title("🏡 بوكر مزارع الأردن")
-st.caption("نظام بحث ذكي تجريبي (RAG)")
+# --- 3. واجهة المستخدم ---
+st.title("🏡 بوكر مزارع الأردن (Powered by Groq)")
 
-# ذاكرة الشات
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# عرض المحادثة السابقة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if isinstance(message["content"], dict):
@@ -65,20 +65,26 @@ for message in st.session_state.messages:
         else:
             st.markdown(message["content"])
 
-# إدخال المستخدم الجديد
-if prompt := st.chat_input("كيف بقدر أساعدك اليوم؟"):
+if prompt := st.chat_input("بدي مزرعة بعمان فيها مسبح"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
-            # طلب الرد من الموديل
-            response = model.generate_content(prompt)
-            text_resp = response.text
+            # طلب الرد من Groq (استخدام موديل llama-3.3-70b-versatile هو الأفضل حالياً)
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                model="llama-3.3-70b-versatile",
+            )
+            
+            text_resp = chat_completion.choices[0].message.content
             
             try:
-                # محاولة استخراج الـ JSON من الرد (في حال وضع الموديل الرد بين علامات ```)
+                # استخراج الـ JSON
                 clean_json = text_resp.strip()
                 if "```json" in clean_json:
                     clean_json = clean_json.split("```json")[1].split("```")[0]
@@ -89,8 +95,7 @@ if prompt := st.chat_input("كيف بقدر أساعدك اليوم؟"):
                 st.json(data)
                 st.session_state.messages.append({"role": "assistant", "content": data})
             except:
-                # إذا لم يكن الرد JSON (مثل جواب "أهلاً بك")
                 st.markdown(text_resp)
                 st.session_state.messages.append({"role": "assistant", "content": text_resp})
         except Exception as e:
-            st.error(f"حدث خطأ أثناء الاتصال بالذكاء الاصطناعي: {e}")
+            st.error(f"حدث خطأ: {e}")
