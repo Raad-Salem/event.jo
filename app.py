@@ -4,33 +4,34 @@ import json
 import re
 
 # --- 1. إعدادات الصفحة ---
-st.set_page_config(page_title="ماكان - event-jo.com", page_icon="🏡", layout="centered")
+st.set_page_config(page_title="ماكان - مساعد event-jo.com", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS محسّن لمنع تكسر الكروت ---
+# --- تنسيق CSS احترافي لمنع تكسر الواجهة ---
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 15px; }
     .farm-card {
-        background-color: #fdfdfd;
+        background-color: #ffffff;
         border-right: 6px solid #2e7d32;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        margin: 15px 0;
+        padding: 18px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        margin: 20px 0;
         direction: rtl;
         text-align: right;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .farm-name { color: #2e7d32; font-size: 1.2rem; font-weight: bold; margin-bottom: 8px; }
-    .farm-info { color: #444; font-size: 0.95rem; line-height: 1.6; }
-    .emoji { margin-left: 5px; }
+    .farm-name { color: #2e7d32; font-size: 1.3rem; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+    .farm-info { color: #333; font-size: 1rem; line-height: 1.8; margin-bottom: 5px; }
+    .farm-info b { color: #2e7d32; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. البيانات والـ API ---
+# يفضل وضع المفتاح في Streamlit Secrets لاحقاً
 GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
-# بيانات المزارع (تم التأكد من صحتها)
 farms_data = [
     {"id": 1, "name": "Green Valley Farm", "location": "Amman", "price_per_day": 120, "available": True, "features": ["Pool", "BBQ", "WiFi"]},
     {"id": 2, "name": "Sunset Farm", "location": "Salt", "price_per_day": 90, "available": True, "features": ["BBQ", "Garden"]},
@@ -47,25 +48,28 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 3. البرومبت الصارم ---
+# --- 3. البرومبت الذكي ---
 system_prompt = f"""
-أنت "ماكان"، المساعد الذكي الرسمي لموقع event-jo.com.
+أنت المساعد الذكي "ماكان" من موقع event-jo.com. 
+مهمتك: مساعدة المستخدمين في اختيار مزارع الأردن من القائمة التالية فقط: {json.dumps(farms_data)}
 
-قواعد صارمة:
-1. وظيفتك **فقط** هي المساعدة في حجز المزارع في الأردن من هذه البيانات: {json.dumps(farms_data)}
-2. إذا سألك المستخدم عن أي موضوع خارج المزارع (سياسة، كورونا، طبخ، أخبار)، اعتذر بلباقة بلهجة أردنية وقل: "أنا متخصص بس بمزارع الأردن من event-jo.com، بقدر أساعدك تلاقي مزرعة بتجنن!".
-3. في حال البحث: ابدأ الرد بجملة ترحيبية، ثم ضع البيانات حصراً داخل وسم [DATA]...[/DATA] بصيغة JSON.
-4. لا تقترح مزارع في مناطق غير موجودة (مثل صويلح إذا لم تكن في القائمة).
-5. ممنوع عرض أي كود HTML في ردك النصي.
+القواعد:
+1. إذا كانت الرسالة مجرد ترحيب أو سؤال عن اسمك، جاوب بلطف وبلهجة أردنية دون ذكر المزارع.
+2. إذا طلب المستخدم مزارع أو سأل عن منطقة، يجب أن تقدم له اقتراحات ثم تضع التفاصيل بصيغة JSON داخل وسم [DATA]...[/DATA].
+3. التنسيق المطلوب للـ JSON: 
+{{"recommendations": [{{"name": "اسم المزرعة", "price": "السعر", "features": "المميزات", "reason": "سبب الترشيح"}}]}}
+4. لا تجب عن أي أسئلة خارج نطاق السياحة والمزارع في الأردن.
+5. لا تقترح مزارع غير موجودة في القائمة.
 """
 
 # --- 4. واجهة المستخدم ---
 st.title("🏡 ماكان - مساعد مزارع الأردن")
-st.caption("النسخة المطورة - event-jo.com")
+st.caption("موقع event-jo.com - بوابتك لأجمل مزارع المملكة")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# عرض المحادثة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"], unsafe_allow_html=True)
@@ -77,38 +81,43 @@ if prompt := st.chat_input("كيف بقدر أساعدك اليوم؟"):
 
     with st.chat_message("assistant"):
         try:
-            # تنظيف السياق للموديل
-            messages_history = [{"role": "system", "content": system_prompt}]
-            for msg in st.session_state.messages[-5:]: 
-                clean_content = re.sub(r'<div.*?>.*?</div>', '', msg["content"], flags=re.DOTALL)
-                messages_history.append({"role": msg["role"], "content": clean_content})
+            # بناء السياق للذكاء الاصطناعي
+            history = [{"role": "system", "content": system_prompt}]
+            for msg in st.session_state.messages[-5:]:
+                # تنظيف المحتوى من أي كود HTML مخزن قبل إرساله للموديل
+                clean_text = re.sub(r'<div.*?>.*?</div>', '', msg["content"], flags=re.DOTALL)
+                history.append({"role": msg["role"], "content": clean_text})
 
             chat_completion = client.chat.completions.create(
-                messages=messages_history,
+                messages=history,
                 model="llama-3.3-70b-versatile",
-                temperature=0.3, # تقليل الحرارة لزيادة الدقة ومنع الهذيان
+                temperature=0.5, # توازن بين الذكاء والالتزام
             )
             
-            full_response = chat_completion.choices[0].message.content
+            full_res = chat_completion.choices[0].message.content
             
-            # معالجة الفصل بين النص والكروت
-            display_text = full_response.split("[DATA]")[0].strip()
-            json_match = re.search(r"\[DATA\](.*?)\[/DATA\]", full_response, re.DOTALL)
+            # استخراج النص (ما قبل البيانات التقنية)
+            display_text = full_res.split("[DATA]")[0].strip()
+            
+            # البحث عن الـ JSON بأكثر من طريقة لضمان الاستقرار
+            json_pattern = r'\{.*"recommendations".*\}'
+            json_match = re.search(json_pattern, full_res, re.DOTALL)
             
             cards_html = ""
             if json_match:
                 try:
-                    data = json.loads(json_match.group(1).strip())
+                    data = json.loads(json_match.group(0).strip())
                     for rec in data.get("recommendations", []):
-                        # بناء الكرت برمجياً لضمان عدم تكسر الـ HTML
                         cards_html += f"""
                         <div class="farm-card">
                             <div class="farm-name">🏠 {rec['name']}</div>
-                            <div class="farm-info">💰 <b>السعر:</b> {rec.get('price', 'حسب الموسم')} دينار</div>
-                            <div class="farm-info">🌟 <b>المميزات:</b> {rec.get('features', 'متعددة')}</div>
+                            <div class="farm-info">💰 <b>السعر:</b> {rec.get('price', 'حسب التواصل')} دينار</div>
+                            <div class="farm-info">🌟 <b>المميزات:</b> {rec.get('features', 'مسبح وجلسات')}</div>
                             <div class="farm-info">📝 <b>ليش بنصحك فيها:</b> {rec.get('reason', '')}</div>
                         </div>
                         """
+                    # تنظيف النص النهائي من أي كود JSON قد يظهر للمستخدم
+                    display_text = re.sub(json_pattern, '', display_text, flags=re.DOTALL).strip()
                 except:
                     pass
 
