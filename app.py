@@ -5,18 +5,20 @@ import json
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(page_title="ماكان - مساعد event-jo.com", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS لجعل الردود تبدو كبطاقات مزارع ---
+# --- تنسيق CSS لتحسين العرض البصري ---
 st.markdown("""
     <style>
+    .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
     .farm-card {
         background-color: #ffffff;
         border-left: 5px solid #2e7d32;
         padding: 15px;
-        margin: 10px 0px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-radius: 10px;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+        margin-bottom: 15px;
     }
-    .stChatMessage { border-radius: 15px; }
+    .farm-name { color: #2e7d32; font-size: 20px; font-weight: bold; }
+    .farm-reason { color: #555; font-style: italic; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -42,30 +44,20 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 3. الـ Prompt المعدل ليعطي رداً نصياً + JSON ---
+# --- 3. تعليمات النظام ---
 system_prompt = f"""
-أنت "ماكان"، المساعد الذكي لموقع event-jo.com. 
-تحدث بلهجة أردنية ودودة ومحترفة.
+أنت "ماكان" (Makan)، المساعد الذكي لموقع event-jo.com.
+مهمتك مساعدة المستخدمين في العثور على مزارع في الأردن من هذه الداتا: {json.dumps(farms_data)}
 
-البيانات: {json.dumps(farms_data)}
+شخصيتك: أردني نشمي، ودود، ومهني.
 
-طريقة الرد الإلزامية:
-1. ابدأ دائماً بجملة: "أبشر يا غالي، أكيد متوفر مزارع بـ [الموقع] بتناسبك."
-2. لكل مزرعة تقترحها، اكتب المعلومات كالتالي:
-   اسم المزرعة: [اسم المزرعة]
-   موقعها: [الموقع]
-   ليش اخترتلك إياها: [سبب بلهجة أردنية]
-   السعر التقريبي: [السعر] دينار
-
-3. في نهاية ردك تماماً، ضع الـ JSON التالي لغايات النظام:
-{{
-  "filters": {{"location": "", "price_range": "", "features": []}},
-  "recommendations": [{{ "name": "", "id": "" }}]
-}}
+عند طلب مزرعة، يجب أن ترد بنص طبيعي أولاً، متبوعاً بـ JSON يحتوي على التفاصيل. 
+تأكد أن الـ JSON نظيف تماماً ولا يحتوي على ترقيم خارجي (مثل 0: أو 1:).
 """
 
 # --- 4. واجهة المستخدم ---
-st.title("🏡 ماكان - مساعد event-jo.com")
+st.title("🏡 ماكان - مساعد حجز مزارع الأردن")
+st.caption("خدمة ذكية مقدمة من event-jo.com")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -74,38 +66,51 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("مثلاً: بدي مزرعة بعمان"):
+if prompt := st.chat_input("بدي مزرعة بعمان"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
-            # استخدام موديل Qwen على Groq
             chat_completion = client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                model="qwen-2.5-32b", # تأكد من أن هذا الموديل متاح في حسابك
-                temperature=0.6
+                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile",
+                temperature=0.6,
             )
-            
             full_response = chat_completion.choices[0].message.content
-            
-            # عرض الرد النصي الجميل للمستخدم
+
             if "{" in full_response:
-                text_part = full_response.split("{")[0]
-                st.markdown(text_part)
+                intro = full_response.split("{")[0].strip()
+                json_part = "{" + full_response.split("{", 1)[1]
                 
-                # إظهار الـ JSON في مكان مخفي أو كـ Expander للفحص
-                with st.expander("تفاصيل تقنية للبحث"):
-                    json_part = "{" + full_response.split("{", 1)[1]
-                    st.code(json_part, language='json')
+                # عرض الترحيب
+                if intro:
+                    st.markdown(f"### ✨ أبشر، هاي أحلى مزارع طلبك:")
+                    st.write(intro)
+                
+                try:
+                    # تنظيف وتحويل الـ JSON
+                    clean_json = json_part.replace("```json", "").replace("```", "").strip()
+                    data = json.loads(clean_json)
+                    
+                    # عرض المزارع بتنسيق فخم (Cards)
+                    for rec in data.get("recommendations", []):
+                        st.markdown(f"""
+                        <div class="farm-card">
+                            <div class="farm-name">📍 الاسم: {rec['name']}</div>
+                            <div class="farm-reason">💡 المميزات: {rec['reason']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with st.expander("بيانات النظام التقنية"):
+                        st.json(data)
+                except:
+                    st.markdown(full_response)
             else:
                 st.markdown(full_response)
             
             st.session_state.messages.append({"role": "assistant", "content": full_response})
-                
+            
         except Exception as e:
-            st.error(f"حدث خطأ: {e}")
+            st.error(f"عذراً، حدث خطأ: {e}")
