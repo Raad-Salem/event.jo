@@ -27,7 +27,8 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. إعداد الـ API والبيانات ---
-GROQ_API_KEY = "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"
+# بدل السطر القديم، حط هاد السطر:
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 client = Groq(api_key=GROQ_API_KEY)
 
 farms_data = [
