@@ -6,27 +6,27 @@ import re
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(page_title="ماكان - event-jo.com", page_icon="🏡", layout="centered")
 
-# --- تنسيق CSS ثابت ونظيف ---
+# --- تنسيق CSS ثابت ---
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 15px; }
     .farm-card {
         background-color: #ffffff;
         border-right: 6px solid #2e7d32;
-        padding: 18px;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        margin: 15px 0;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin: 10px 0;
         direction: rtl;
         text-align: right;
     }
-    .farm-name { color: #2e7d32; font-size: 1.3rem; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-    .farm-info { color: #333; font-size: 1rem; line-height: 1.7; margin-bottom: 4px; }
+    .farm-name { color: #2e7d32; font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; }
+    .farm-info { color: #333; font-size: 0.95rem; line-height: 1.6; }
     .farm-info b { color: #2e7d32; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. البيانات والـ API ---
+# --- 2. إعداد الـ API والبيانات ---
 GROQ_API_KEY = "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"
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -46,84 +46,99 @@ farms_data = [
     {"id": 15, "name": "Farm 15", "location": "Irbid", "price_per_day": 88, "available": True, "features": ["Garden"]}
 ]
 
-# --- 3. البرومبت "الصارم" ---
+# --- 3. تعليمات النظام ---
 system_prompt = f"""
-أنت المساعد "ماكان" من event-jo.com. 
-مهمتك الوحيدة هي ترشيح مزارع من القائمة التالية: {json.dumps(farms_data)}
+أنت "ماكان"، المساعد الذكي لموقع event-jo.com. 
+مهمتك إيجاد مزارع للإيجار في الأردن من هذه الداتا فقط: {json.dumps(farms_data)}
 
-قواعد الرد:
-1. ممنوع نهائياً كتابة أي كود HTML أو CSS في ردك (لا تكتب <div... ولا غيره).
-2. ابدأ بردك بجملة ترحيبية قصيرة بلهجة أردنية.
-3. ضع اقتراحات المزارع حصراً داخل وسم [DATA]...[/DATA] بصيغة JSON فقط.
-4. شكل الـ JSON المطلوب:
+القواعد الصارمة:
+1. إذا كانت رسالة المستخدم مجرد تحية (هاي، مرحبا، كيفك)، جاوب بترحيب لطيف واسأله كيف ممكن تساعده. **ممنوع نهائياً** ترشيح أي مزرعة أو استخدام وسم [DATA].
+2. إذا طلب المستخدم مزرعة أو سأل عن منطقة، اكتب مقدمة بسيطة، ثم ضع الاقتراحات حصراً داخل وسم [DATA]...[/DATA] بصيغة JSON.
+3. التنسيق الإلزامي للاقتراحات:
+[DATA]
 {{
   "recommendations": [
-    {{"name": "اسم المزرعة", "price": 0, "features": "ميزة 1، ميزة 2", "reason": "لماذا اخترتها؟"}}
+    {{"name": "اسم المزرعة", "price": 120, "features": "الميزات", "reason": "سبب الترشيح"}}
   ]
 }}
-5. إذا سألك عن شيء غير المزارع، اعتذر بلطف.
+[/DATA]
+4. ممنوع كتابة أي كود HTML أو CSS.
 """
 
 # --- 4. واجهة المستخدم ---
 st.title("🏡 ماكان - مساعد مزارع الأردن")
 st.caption("event-jo.com - بوابتك لأجمل مزارع المملكة")
 
+# تهيئة الذاكرة بشكل جديد (النص مفصول عن الداتا)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"], unsafe_allow_html=True)
+# دالة رسم الكروت (هيك الموديل ما بشوف الـ HTML)
+def render_cards(farms_list):
+    for rec in farms_list:
+        st.markdown(f"""
+        <div class="farm-card">
+            <div class="farm-name">🏠 {rec.get('name', '')}</div>
+            <div class="farm-info">💰 <b>السعر:</b> {rec.get('price', '')} دينار</div>
+            <div class="farm-info">🌟 <b>المميزات:</b> {rec.get('features', '')}</div>
+            <div class="farm-info">📝 <b>ليش بنصحك فيها:</b> {rec.get('reason', '')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# عرض الرسائل السابقة
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["text"])
+        if msg.get("farms"):
+            render_cards(msg["farms"])
 
 if prompt := st.chat_input("كيف بقدر أساعدك اليوم؟"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state.messages.append({"role": "user", "text": prompt, "farms": []})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
-            # تجهيز المحادثة
-            history = [{"role": "system", "content": system_prompt}]
+            # 1. إرسال المحادثة للموديل (نص صافي فقط بدون HTML)
+            history_for_llm = [{"role": "system", "content": system_prompt}]
             for msg in st.session_state.messages[-5:]:
-                # حذف أي HTML سابق قبل إرساله للموديل عشان ما يقلده
-                clean_msg = re.sub(r'<.*?>', '', msg["content"], flags=re.DOTALL)
-                history.append({"role": msg["role"], "content": clean_text if 'clean_text' in locals() else clean_msg})
+                history_for_llm.append({"role": msg["role"], "content": msg["text"]})
 
             chat_completion = client.chat.completions.create(
-                messages=history,
+                messages=history_for_llm,
                 model="llama-3.3-70b-versatile",
-                temperature=0.4,
+                temperature=0.3, # دقة عالية عشان يلتزم بالقواعد
             )
             
             full_res = chat_completion.choices[0].message.content
             
-            # 1. استخراج النص الترحيبي (قبل الداتا)
+            # 2. استخراج النص والـ JSON بأمان تام
             display_text = full_res.split("[DATA]")[0].strip()
-            # التأكد من تنظيف النص من أي JSON قد يهرب خارج الوسوم
-            display_text = re.sub(r'\{.*\}', '', display_text, flags=re.DOTALL).strip()
-
-            # 2. استخراج الـ JSON وتحويله لكروت
-            cards_html = ""
-            json_match = re.search(r"\[DATA\](.*?)\[/DATA\]", full_res, re.DOTALL) or re.search(r"(\{.*\})", full_res, re.DOTALL)
+            
+            # تنظيف إضافي لمنع ظهور أقواس الـ JSON ككلام عادي
+            display_text = re.sub(r'\{.*?\}', '', display_text, flags=re.DOTALL).strip()
+            
+            extracted_farms = []
+            json_match = re.search(r"\[DATA\](.*?)\[/DATA\]", full_res, re.DOTALL)
             
             if json_match:
                 try:
-                    data = json.loads(json_match.group(1 if "[DATA]" in full_res else 0).strip())
-                    for rec in data.get("recommendations", []):
-                        cards_html += f"""
-                        <div class="farm-card">
-                            <div class="farm-name">🏠 {rec['name']}</div>
-                            <div class="farm-info">💰 <b>السعر:</b> {rec.get('price')} دينار</div>
-                            <div class="farm-info">🌟 <b>المميزات:</b> {rec.get('features')}</div>
-                            <div class="farm-info">📝 <b>ليش بنصحك فيها:</b> {rec.get('reason')}</div>
-                        </div>
-                        """
-                except:
+                    data = json.loads(json_match.group(1).strip())
+                    extracted_farms = data.get("recommendations", [])
+                except Exception:
                     pass
 
-            final_output = display_text + cards_html
-            st.markdown(final_output, unsafe_allow_html=True)
-            st.session_state.messages.append({"role": "assistant", "content": final_output})
+            # 3. عرض النتيجة
+            st.markdown(display_text)
+            if extracted_farms:
+                render_cards(extracted_farms)
+            
+            # 4. حفظ الرسالة في الذاكرة بشكل منظم
+            st.session_state.messages.append({
+                "role": "assistant",
+                "text": display_text,
+                "farms": extracted_farms
+            })
             
         except Exception as e:
             st.error(f"حدث خطأ: {e}")
